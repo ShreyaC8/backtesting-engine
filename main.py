@@ -19,6 +19,10 @@ def main():
     plt.plot(x1,y1,'r')
     plt.plot(x2,y2,'b')
     plt.legend(["Strategy Equity", "Benchmark Equity"])
+    plt.xlabel("Date")
+    plt.ylabel("Equity")
+    plt.title("20/50-Day MA Crossover Strategy vs. Buy & Hold (2016–2025)")
+    plt.savefig("output/equity_curve.png")
     plt.show()
 
 if __name__ == "__main__":
