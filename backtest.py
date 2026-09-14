@@ -13,7 +13,7 @@ def run_backtest(prices, signal, transaction_cost_bps=10):
     benchmark_return = daily_returns.mean(axis=1)
     benchmark_equity_curve = (1 + benchmark_return).cumprod()
     result = pd.DataFrame({
-        "strategy_return": strat_return,
+        "strategy_return": transcost_return,
         "strategy_equity": strategy_equity_curve,
         "benchmark_return": benchmark_return,
         "benchmark_equity": benchmark_equity_curve,
