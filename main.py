@@ -2,9 +2,55 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from data import load_prices, load_synthetic_prices
-from strategy import moving_average_signal
+from strategy import moving_average_signal, mean_reversion_signal
 from backtest import run_backtest
 from metrics import summarise
+
+def moving_average(prices, short_window=20, long_window=50, limit=None):
+    plt.figure()
+    signal = moving_average_signal(prices, short_window, long_window)
+    result = run_backtest(prices, signal, 10, limit)
+    metric_summary = summarise(result)
+    print("Summary for Moving Average strategy:")
+    print(metric_summary)
+    print("\n")
+
+    x1 = result["strategy_equity"].index
+    y1 = result["strategy_equity"]
+    x2 = result["benchmark_equity"].index
+    y2 = result["benchmark_equity"]
+
+    plt.plot(x1, y1, 'r')
+    plt.plot(x2, y2, 'b')
+    plt.legend(["Strategy Equity", "Benchmark Equity"])
+    plt.xlabel("Date")
+    plt.ylabel("Equity")
+    plt.title("MA Crossover Strategy vs. Buy & Hold")
+    plt.savefig("output/ma_equity_curve.png")
+    plt.show()
+
+def mean_reversion(prices, window=20, entry_threshold=-1.0, exit_threshold=0.0, limit=None):
+    plt.figure()
+    signal = mean_reversion_signal(prices, window, entry_threshold, exit_threshold)
+    result = run_backtest(prices, signal, 10, limit)
+    metric_summary = summarise(result)
+    print("Summary for Mean Reversion strategy:")
+    print(metric_summary)
+    print("\n")
+
+    x1 = result["strategy_equity"].index
+    y1 = result["strategy_equity"]
+    x2 = result["benchmark_equity"].index
+    y2 = result["benchmark_equity"]
+
+    plt.plot(x1, y1, 'r')
+    plt.plot(x2, y2, 'b')
+    plt.legend(["Strategy Equity", "Benchmark Equity"])
+    plt.xlabel("Date")
+    plt.ylabel("Equity")
+    plt.title("MR Crossover Strategy vs. Buy & Hold")
+    plt.savefig("output/mr_equity_curve.png")
+    plt.show()
 
 def cost_sensitivity_analysis(prices):
     signal = moving_average_signal(prices, short_window=20, long_window=50)
@@ -32,7 +78,8 @@ def cost_sensitivity_analysis(prices):
     print("Summary for transaction cost 50 bps:")
     print(metric_summary_50)
     print("\n")
-    
+
+    # plt.subplots() always creates a brand-new figure, so no plt.figure() needed here
     cost_sensitive_analysis, [[cost_0, cost_10], [cost_30, cost_50]] = plt.subplots(2, 2, figsize=(10, 4))
 
     cost_0.plot(result_0["strategy_equity"].index, result_0["strategy_equity"], label="Strategy Equity", color="blue")
@@ -60,7 +107,6 @@ def cost_sensitivity_analysis(prices):
     cost_sensitive_analysis.supylabel("Account Equity")
 
     plt.tight_layout()
-    plt.show()
     plt.savefig("output/cost_sensitive_analysis_equity_curves.png")
     plt.show()
 
@@ -71,23 +117,80 @@ def parameter_sensitivity(prices, window_pairs):
         signal = moving_average_signal(prices, short_window, long_window)
         result = run_backtest(prices, signal, 10)
         metric_summary = summarise(result)
-        key_metrics["Short/Long"] = str(short_window)+"/"+str(long_window)
+        key_metrics["Short/Long"] = str(short_window) + "/" + str(long_window)
         key_metrics["Sharpe"] = metric_summary["strategy_sharpe_ratio"]
         key_metrics["Total Return"] = metric_summary["strategy_total_return"]
         key_metrics["Max Drawdown"] = metric_summary["strategy_max_drawdown"]
         df_basis.append(key_metrics)
     table = pd.DataFrame(df_basis)
+    print("Parameter sensitivity results:")
     print(table)
+    print("\n")
 
+    plt.figure()
     x = list(table["Short/Long"])
     y = list(table["Sharpe"])
-    plt.bar(x,y)
+    plt.bar(x, y)
+    plt.xlabel("Short/Long")
+    plt.ylabel("Sharpe")
+    plt.title("Sharpe Ratio by Moving Average Window Pair")
+    plt.savefig("output/parameter_sensitivity_curves.png")
+    plt.show()
+
+def strategy_comparison(prices):
+    moving_avg_sig = moving_average_signal(prices)
+    mean_reversion_sig = mean_reversion_signal(prices)
+
+    moving_avg_result = run_backtest(prices, moving_avg_sig, 10)
+    mean_reversion_result = run_backtest(prices, mean_reversion_sig, 10)
+
+    moving_summary = summarise(moving_avg_result)
+    mean_summary = summarise(mean_reversion_result)
+
+    basis = [{
+        "Strategy": "Moving Average",
+        "Sharpe": moving_summary["strategy_sharpe_ratio"],
+        "Total Return": moving_summary["strategy_total_return"],
+        "Max Drawdown": moving_summary["strategy_max_drawdown"]
+        },
+        {
+        "Strategy": "Mean Reversion",
+        "Sharpe": mean_summary["strategy_sharpe_ratio"],
+        "Total Return": mean_summary["strategy_total_return"],
+        "Max Drawdown": mean_summary["strategy_max_drawdown"]
+        }]
+
+    comparison = pd.DataFrame(basis)
+    print("Strategy comparison:")
+    print(comparison)
+    print("\n")
+
+    x1 = moving_avg_result["strategy_equity"].index
+    y1 = moving_avg_result["strategy_equity"]
+    x2 = mean_reversion_result["strategy_equity"].index
+    y2 = mean_reversion_result["strategy_equity"]
+    x3 = moving_avg_result["benchmark_equity"].index
+    y3 = moving_avg_result["benchmark_equity"]
+
+    plt.plot(x1, y1, 'r')
+    plt.plot(x2, y2, 'b')
+    plt.plot(x3, y3, 'g')
+    plt.legend(["MA Strategy Equity", "MR Strategy Equity", "Benchmark Equity"])
+    plt.xlabel("Date")
+    plt.ylabel("Equity")
+    plt.title("MA Crossover Strategy vs. MR Crossover Strategy")
+    plt.savefig("output/ma_vs_mr_equity_curve.png")
     plt.show()
 
 def main():
     window_pairs = [(10, 30), (20, 50), (20, 80), (30, 100), (40, 120), (50, 150)]
     prices = load_prices(["MSFT", "AMZN", "JPM", "GOOGL"], start="2016-01-01", end="2026-01-01")
-    parameter_sensitivity(prices,window_pairs)
+
+    moving_average(prices)
+    mean_reversion(prices, limit=-0.2)
+    cost_sensitivity_analysis(prices)
+    parameter_sensitivity(prices, window_pairs)
+    strategy_comparison(prices)
 
 if __name__ == "__main__":
     main()
