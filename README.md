@@ -109,8 +109,12 @@ equity curve that results once positions start being clamped. This is a
 simplifying approximation, not a fully self-consistent walk-forward
 simulation — a genuine limitation, noted here rather than hidden.
 
-*(Results at a -20% limit on the real dataset: [fill in your own max
-drawdown / total return comparison here once you've run it].)*
+| | Total Return | Max Drawdown | Sharpe |
+|---|---|---|---|
+| Without breaker | 342.0% | -28.7% | 0.85 |
+| With -20% breaker | 632.5% | -20.0% | 1.19 |
+
+The -20% drawdown breaker improved every metric — not just drawdown, but total return and Sharpe too. This makes sense once you consider how losses work: a 50% loss needs a 100% gain just to break even, so cutting off deep losses early leaves more capital in the account to grow once the strategy starts winning again. That said, take this result with a grain of salt — the breaker decides when to trigger using the equity curve from a version of the backtest where it was never turned on in the first place. That's a simplification, not a fully realistic simulation, so the real-world improvement might be smaller than shown here.
 
 ## Methodology
 
