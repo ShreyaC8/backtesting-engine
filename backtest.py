@@ -1,41 +1,33 @@
 import pandas as pd
 
-def apply_drawdown_limit(equity_curve, weights, limit=-0.20):
-    adjusted_weights = weights.copy()
-    peak = 1.0
-    for date in equity_curve.index:
-        peak = max(peak, equity_curve.loc[date])
-        current_drawdown = equity_curve.loc[date] / peak - 1
-        if current_drawdown < limit:
-            adjusted_weights.loc[date] = 0   # force to cash
-    return adjusted_weights
+def run_backtest(prices, signal, transaction_cost_bps=10, limit=None, cooldown=20, lag=1):
+    daily_returns = prices.pct_change().fillna(0)
+    lagged_signal = signal.shift(lag).fillna(0)
+    target = lagged_signal.div(lagged_signal.sum(axis=1).replace(0, 1), axis=0)
+    cost_rate = transaction_cost_bps / 10000
 
-def run_backtest(prices, signal, transaction_cost_bps=10, limit=None):
-    daily_returns = prices.pct_change()
-    lagged_signal = signal.shift(1).fillna(0)
-    row_sum = lagged_signal.sum(axis=1)
-    position_weights = lagged_signal.div(row_sum.replace(0,1), axis=0)
+    equity, peak, days_out = 1.0, 1.0, 0
+    prev_w = pd.Series(0.0, index=prices.columns)
+    rows = []
+    for date in prices.index:
+        # decision uses only yesterday's closing equity
+        if limit is not None and days_out == 0 and equity / peak - 1 < limit:
+            days_out = cooldown
+        if days_out > 0:
+            w = prev_w * 0
+            days_out -= 1
+            if days_out == 0:
+                peak = equity  # reset the peak after the cooldown
+        else:
+            w = target.loc[date]
+        turnover = (w - prev_w).abs().sum()
+        ret = (w * daily_returns.loc[date]).sum() - turnover * cost_rate
+        equity *= 1 + ret
+        peak = max(peak, equity)
+        rows.append((date, ret, equity, turnover))
+        prev_w = w
 
-    if limit is not None:
-        equity_result = run_backtest(prices, signal, transaction_cost_bps, None)
-        equity_arg = equity_result["strategy_equity"]
-        adjusted_weights = apply_drawdown_limit(equity_arg, position_weights, limit)
-        position_weights = adjusted_weights
-
-    strat_return = (position_weights * daily_returns).sum(axis=1)
-    position_changes = lagged_signal.diff().abs().sum(axis=1)
-    costs = position_changes * (transaction_cost_bps / 10000)
-
-    transcost_return = strat_return - costs
-    strategy_equity_curve = (1 + transcost_return).cumprod()
-    benchmark_return = daily_returns.mean(axis=1)
-    benchmark_equity_curve = (1 + benchmark_return).cumprod()
-
-    result = pd.DataFrame({
-        "strategy_return": transcost_return,
-        "strategy_equity": strategy_equity_curve,
-        "benchmark_return": benchmark_return,
-        "benchmark_equity": benchmark_equity_curve,
-        "turnover": position_changes
-    })
-    return result.dropna()
+    out = pd.DataFrame(rows, columns=["date", "strategy_return", "strategy_equity", "turnover"]).set_index("date")
+    out["benchmark_return"] = daily_returns.mean(axis=1)
+    out["benchmark_equity"] = (1 + out["benchmark_return"]).cumprod()
+    return out.iloc[1:]
